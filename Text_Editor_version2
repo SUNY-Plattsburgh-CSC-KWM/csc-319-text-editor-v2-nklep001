@@ -1,0 +1,278 @@
+#include <iostream>
+#include <string>
+#include <vector>
+#include <sstream>
+#include <fstream>
+#include <algorithm>
+
+using namespace std;
+
+// Class Definition for the Text Editor
+class TextEditor {
+private:
+    // Data Member: a vector to store the lines of text
+    vector<string> textlines;
+    string copyBuffer;
+
+    // ---- Private Helper Methods ----
+    // These methods implement the core logic for each command.
+    // They are private because only the run() method needs to call them.
+
+    void print() const {
+        for (size_t i = 0; i < textlines.size(); ++i) {
+            cout << "[" << i << "] " << textlines[i] << '\n';
+        }
+    }
+
+    void summarize() const {
+        int totalChars = 0;
+        for (const auto& line : textlines) {
+            totalChars += line.size();
+        }
+        cout << "Line count: " << textlines.size() << endl;
+        cout << "Character count: " << totalChars << endl;
+    }
+
+    void printWithChars() const {
+        for (size_t i = 0; i < textlines.size(); ++i) {
+            cout << "[" << i << "] [" << textlines[i].length() << "] " << textlines[i] << '\n';
+        }
+    }
+
+    void addLine() {
+        string text;
+        cout << "Enter the text to add: ";
+        getline(cin, text);
+        textlines.push_back(text);
+    }
+
+    void deleteLine(istringstream& iss) {
+        int n;
+        if (iss >> n && n >= 0 && n < textlines.size()) {
+            textlines.erase(textlines.begin() + n);
+        } else {
+            cout << "Invalid line number." << endl;
+        }
+    }
+
+    void insertLine(istringstream& iss) {
+        int n;
+        if (iss >> n && n >= -1 && n < static_cast<int>(textlines.size())) {
+            string text;
+            cout << "Enter line to insert: ";
+            //cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            getline(cin, text);
+            textlines.insert(textlines.begin() + n + 1, text);
+        } else {
+            cout << "Invalid line number." << endl;
+        }
+    }
+
+    void replaceLine(istringstream& iss) {
+        int n;
+        if (iss >> n && n >= 0 && n < textlines.size()) {
+            string text;
+            cout << "Enter new line content: ";
+            //cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            getline(cin, text);
+            textlines[n] = text;
+        } else {
+            cout << "Invalid line number." << endl;
+        }
+    }
+    
+    void writeToFile(istringstream& iss) {
+        string filename;
+        if (iss >> filename) {
+            ofstream outFile(filename);
+            if (outFile) {
+                for (const auto& line : textlines) {
+                    outFile << line << std::endl;
+                }
+                cout << "File written to " << filename << endl;
+            } else {
+                cout << "Could not open file for writing." << endl;
+            }
+        } else {
+            cout << "No filename provided." << endl;
+        }
+    }
+    
+    void sortLines() {
+        sort(textlines.begin(), textlines.end());
+    }
+
+    void displayHelp() const {
+        cout << "Commands:\n"
+             << "  append         - Add a new line\n"
+             << "  delete n       - Delete line n\n"
+             << "  insert n       - Insert after line n (-1 for beginning)\n"
+             << "  replace n      - Replace line n\n"
+             << "  change         - Find a line by its content and replace it\n"
+             << "  find <target>  - Find lines containing the target string\n"
+             << "  read <file>    - Read a file, replacing current content\n"
+             << "  write <file>   - Write (save) to a file\n"
+             << "  yank n         - Copy line n into the copy buffer\n"
+             << "  put n          - Paste the buffer after line n (-1 for top)\n"
+             << "  sort           - Sort all lines alphabetically\n"
+             << "  stat           - Summarize line and character counts\n"
+             << "  c              - Print lines with character counts\n"
+             << "  help           - Display this help message\n"
+             << "  q              - Quit the editor\n";
+    }
+
+    void changelines() {
+        string lineToFind;
+        cout << "Enter the exact content of the line you want to replace: ";
+        getline(cin, lineToFind);
+
+        auto it = find(textlines.begin(), textlines.end(), lineToFind);
+
+        if (it != textlines.end()) {
+            string newLine;
+            cout << "Enter the new content for this line: ";
+            getline(cin, newLine);
+
+            *it = newLine;
+            cout << "Line replaced successfully." << endl;
+        } else {
+            cout << "Error: The specified line was not found." << endl;
+        }
+
+    }
+
+    void findTarget(istringstream& iss) {
+        string target;
+        // Read the target word from the user's command
+        if (!(iss >> target)) {
+            cout << "Usage: find <target_string>" << endl;
+            return;
+        }
+
+        bool found = false;
+        cout << "Searching for \"" << target << "\"..." << endl;
+
+        for (size_t i = 0; i < textlines.size(); ++i) {
+            if (textlines[i].find(target) != string::npos) {
+                cout << "[" << i << "] " << textlines[i] << '\n';
+                found = true;
+            }
+        }
+
+        if (!found) {
+            cout << "--- No matches found ---" << endl;
+        }
+    }
+
+    void readFile(istringstream& iss) {
+        string filename;
+        if (!(iss >> filename)) {
+            cout << "Usage: read <filename>" << endl;
+            return;
+        }
+
+        ifstream inFile(filename);
+
+        if (!inFile) {
+            cout << "Error: Could not open file \"" << filename << "\"" << endl;
+            return;
+        }
+
+        textlines.clear();
+
+        string line;
+        while (getline(inFile, line)) {
+            textlines.push_back(line);
+        }
+
+        cout << "Successfully loaded " << textlines.size() << " lines from " << filename << "." << endl;
+    }
+
+    void yankLine(istringstream& iss) {
+        int n;
+        if (iss >> n && n >= 0 && n < textlines.size()) {
+            copyBuffer = textlines[n];
+            cout << "Yanked line " << n << ": \"" << copyBuffer << "\"" << endl;
+        } else {
+            cout << "Invalid line number." << endl;
+        }
+    }
+
+    void putLine(istringstream& iss) {
+        if (copyBuffer.empty()) {
+            cout << "Copy buffer is empty. Use 'yank n' to copy a line first." << endl;
+            return;
+        }
+
+        int n;
+
+        if (iss >> n && n >= -1 && n < static_cast<int>(textlines.size())) {
+            textlines.insert(textlines.begin() + n + 1, copyBuffer);
+        } else {
+            cout << "Invalid line number." << endl;
+        }
+    }
+
+
+public:
+    // Public Method: This is the main engine of the editor.
+    void run() {
+        string command_line;
+        while (true) {
+            cout << "> ";
+            getline(cin, command_line);
+            istringstream iss(command_line);
+            string cmd;
+            iss >> cmd;
+
+            if (cmd == "q") {
+                break;
+            } else if (cmd == "append") {
+                addLine();
+            } else if (cmd == "delete") {
+                deleteLine(iss);
+            } else if (cmd == "insert") {
+                insertLine(iss);
+            } else if (cmd == "replace") {
+                replaceLine(iss);
+            } else if (cmd == "write") {
+                writeToFile(iss);
+            } else if (cmd == "sort") {
+                sortLines();
+            } else if (cmd == "stat") {
+                summarize();
+                continue; 
+            } else if (cmd == "c") {
+                printWithChars();
+                continue; 
+            } else if (cmd == "help") {
+                displayHelp();
+                continue; 
+            } else if (cmd == "change") {
+                changelines();
+            } else if (cmd == "find") { 
+                findTarget(iss);
+                continue;
+            } else if (cmd == "read") {
+                readFile(iss);
+            } else if (cmd == "yank") { 
+                yankLine(iss);
+            } else if (cmd == "put") { 
+                putLine(iss);
+            } else {
+                cout << "Unknown command. Type 'help' for a list of commands." << endl;
+                continue; 
+            }
+            
+            cout << endl; // Add a space before printing the result
+            print();
+        }
+    }
+};
+
+// The main function is now very simple!
+int main() {
+    TextEditor myEditor; // Create an instance of the editor
+    myEditor.run();      // Run it
+    return 0;
+}
